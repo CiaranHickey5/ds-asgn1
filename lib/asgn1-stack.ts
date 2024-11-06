@@ -1,19 +1,68 @@
-import { Duration, Stack, StackProps } from 'aws-cdk-lib';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as sqs from 'aws-cdk-lib/aws-sqs';
-import { Construct } from 'constructs';
+import { Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
+import {
+  ApiKey,
+  ApiKeySourceType,
+  Cors,
+  RestApi,
+  UsagePlan,
+} from "aws-cdk-lib/aws-apigateway";
+import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import { Construct } from "constructs";
 
 export class Asgn1Stack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    const queue = new sqs.Queue(this, 'Asgn1Queue', {
-      visibilityTimeout: Duration.seconds(300)
+    // Tables
+    const dbTable = new Table(this, "DbTable", {
+      partitionKey: { name: "pk", type: AttributeType.STRING },
+      removalPolicy: RemovalPolicy.DESTROY,
+      billingMode: BillingMode.PAY_PER_REQUEST,
     });
 
-    const topic = new sns.Topic(this, 'Asgn1Topic');
+    // Rest API
+    const api = new RestApi(this, "RestAPI", {
+      restApiName: "RestAPI",
+      defaultCorsPreflightOptions: {
+        allowOrigins: Cors.ALL_ORIGINS,
+        allowMethods: Cors.ALL_METHODS,
+      },
+      apiKeySourceType: ApiKeySourceType.HEADER,
+    });
 
-    topic.addSubscription(new subs.SqsSubscription(queue));
+    const apiKey = new ApiKey(this, "ApiKey");
+
+    const usagePlan = new UsagePlan(this, "UsagePlan", {
+      name: "Usage Plan",
+      apiStages: [
+        {
+          api,
+          stage: api.deploymentStage,
+        },
+      ],
+    });
+    usagePlan.addApiKey(apiKey);
+
+    // Functions
+    const postsLambda = new NodejsFunction(this, "PostsLambda", {
+      entry: "resources/endpoints/posts.ts",
+      handler: "handler",
+      environment: {
+        TABLE_NAME: dbTable.tableName,
+      },
+    });
+
+    const postLambda = new NodejsFunction(this, "PostLambda", {
+      entry: "resources/endpoints/post.ts",
+      handler: "handler",
+      environment: {
+        TABLE_NAME: dbTable.tableName,
+      },
+    });
+
+    // Permissions
+    dbTable.grantReadWriteData(postsLambda);
+    dbTable.grantReadWriteData(postLambda);
   }
 }
