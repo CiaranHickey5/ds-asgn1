@@ -3,6 +3,7 @@ import {
   ApiKey,
   ApiKeySourceType,
   Cors,
+  LambdaIntegration,
   RestApi,
   UsagePlan,
 } from "aws-cdk-lib/aws-apigateway";
@@ -64,5 +65,28 @@ export class Asgn1Stack extends Stack {
     // Permissions
     dbTable.grantReadWriteData(postsLambda);
     dbTable.grantReadWriteData(postLambda);
+
+    // API Gateway Endpoints
+    const posts = api.root.addResource("posts");
+    const post = posts.addResource("{id}");
+
+    //Connect Lambda Functions to Endpoints
+    const postsIntegration = new LambdaIntegration(postsLambda);
+    const postIntegration = new LambdaIntegration(postLambda);
+
+    // API Gateway Methods
+    posts.addMethod("GET", postsIntegration, {
+      apiKeyRequired: true,
+    });
+    posts.addMethod("POST", postsIntegration, {
+      apiKeyRequired: true,
+    });
+
+    post.addMethod("GET", postIntegration, {
+      apiKeyRequired: true,
+    });
+    post.addMethod("DELETE", postIntegration, {
+      apiKeyRequired: true,
+    });
   }
 }
