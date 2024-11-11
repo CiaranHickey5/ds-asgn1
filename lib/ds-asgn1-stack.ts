@@ -5,6 +5,8 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as custom from "aws-cdk-lib/custom-resources";
 import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { generateBatch } from "../shared/util";
+import { books, reviews } from "../seed/books";
 import * as apig from "aws-cdk-lib/aws-apigateway";
 
 export class DsAsgn1Stack extends cdk.Stack {
@@ -36,6 +38,24 @@ export class DsAsgn1Stack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "ReviewsTableName", {
       value: reviewsTable.tableName,
+    });
+
+    // Seed data into the tables using custom resource
+    new custom.AwsCustomResource(this, "BooksSeedData", {
+      onCreate: {
+        service: "DynamoDB",
+        action: "batchWriteItem",
+        parameters: {
+          RequestItems: {
+            Books: generateBatch(books), // GenerateBatch formats the seed data
+            Reviews: generateBatch(reviews), // Format reviews for seeding
+          },
+        },
+        physicalResourceId: custom.PhysicalResourceId.of("booksddbInitData"),
+      },
+      policy: custom.AwsCustomResourcePolicy.fromSdkCalls({
+        resources: [booksTable.tableArn, reviewsTable.tableArn],
+      }),
     });
   }
 }
