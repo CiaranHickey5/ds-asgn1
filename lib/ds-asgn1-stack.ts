@@ -16,9 +16,8 @@ export class DsAsgn1Stack extends cdk.Stack {
     // Create Books Table with composite primary key
     const booksTable = new dynamodb.Table(this, "BooksTable", {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      partitionKey: { name: "bookId", type: dynamodb.AttributeType.NUMBER }, // numeric primary key
-      sortKey: { name: "authorName", type: dynamodb.AttributeType.STRING }, // string secondary key
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Be careful with this in production
+      partitionKey: { name: "bookId", type: dynamodb.AttributeType.NUMBER },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       tableName: "Books",
     });
 
@@ -31,13 +30,32 @@ export class DsAsgn1Stack extends cdk.Stack {
       tableName: "Reviews",
     });
 
-    // Output table names for reference
-    new cdk.CfnOutput(this, "BooksTableName", {
-      value: booksTable.tableName,
+    // Functions
+
+    // Lambda for Get Book by Id
+    const getBookByIdFn = new lambdanode.NodejsFunction(this, "GetBookByIdFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      entry: `${__dirname}/../lambdas/getBookById.ts`, // Make sure the path is correct for the getBookById.ts file
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: booksTable.tableName, // Pass the table name as an environment variable
+        REGION: "eu-west-1",
+      },
     });
 
-    new cdk.CfnOutput(this, "ReviewsTableName", {
-      value: reviewsTable.tableName,
+    // Lambda for Get All Books
+    const getAllBooksFn = new lambdanode.NodejsFunction(this, "GetAllBooksFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      entry: `${__dirname}/../lambdas/getAllBooks.ts`, // Ensure this path is correct for getAllBooks.ts
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: booksTable.tableName,
+        REGION: "eu-west-1",
+      },
     });
 
     // Seed data into the tables using custom resource
@@ -57,5 +75,41 @@ export class DsAsgn1Stack extends cdk.Stack {
         resources: [booksTable.tableArn, reviewsTable.tableArn],
       }),
     });
+
+    // Permissions
+    booksTable.grantReadData(getBookByIdFn);
+    booksTable.grantReadData(getAllBooksFn);
+
+    // REST API Gateway Integration
+    const api = new apig.RestApi(this, "RestAPI", {
+      description: "Books API",
+      deployOptions: {
+        stageName: "dev",
+      },
+      defaultCorsPreflightOptions: {
+        allowHeaders: ["Content-Type", "X-Amz-Date"],
+        allowMethods: ["OPTIONS", "GET"],
+        allowCredentials: true,
+        allowOrigins: ["*"],
+      },
+    });
+
+    // Endpoints
+
+    // Define the "books" resource in the API Gateway
+    const booksEndpoint = api.root.addResource("books");
+
+    // GET /books - Get all books
+    booksEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getAllBooksFn, { proxy: true })
+    );
+
+    // GET /books/{bookId} - Get a book by ID
+    const bookEndpoint = booksEndpoint.addResource("{bookId}");
+    bookEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getBookByIdFn, { proxy: true })
+    );
   }
 }
