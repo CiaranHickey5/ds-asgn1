@@ -1,16 +1,41 @@
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
+import * as cdk from "aws-cdk-lib";
+import * as lambdanode from "aws-cdk-lib/aws-lambda-nodejs";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as custom from "aws-cdk-lib/custom-resources";
+import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as apig from "aws-cdk-lib/aws-apigateway";
 
 export class DsAsgn1Stack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // The code that defines your stack goes here
+    // Create Books Table with composite primary key
+    const booksTable = new dynamodb.Table(this, "BooksTable", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: { name: "bookId", type: dynamodb.AttributeType.NUMBER }, // numeric primary key
+      sortKey: { name: "authorName", type: dynamodb.AttributeType.STRING }, // string secondary key
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Be careful with this in production
+      tableName: "Books",
+    });
 
-    // example resource
-    // const queue = new sqs.Queue(this, 'DsAsgn1Queue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
+    // Create Reviews Table with a partition key on bookId and sort key on reviewerName
+    const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: { name: "bookId", type: dynamodb.AttributeType.NUMBER },
+      sortKey: { name: "reviewerName", type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "Reviews",
+    });
+
+    // Output table names for reference
+    new cdk.CfnOutput(this, "BooksTableName", {
+      value: booksTable.tableName,
+    });
+
+    new cdk.CfnOutput(this, "ReviewsTableName", {
+      value: reviewsTable.tableName,
+    });
   }
 }
