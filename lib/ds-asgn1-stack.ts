@@ -85,6 +85,23 @@ export class DsAsgn1Stack extends cdk.Stack {
       },
     });
 
+    // Lambda for Update Review
+    const updateReviewFn = new lambdanode.NodejsFunction(
+      this,
+      "UpdateReviewFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: `${__dirname}/../lambdas/updateReview.ts`, // Make sure this file exists and has the correct logic
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          REVIEWS_TABLE_NAME: reviewsTable.tableName,
+          REGION: "eu-west-1",
+        },
+      }
+    );
+
     // Seed data into the tables using custom resource
     new custom.AwsCustomResource(this, "BooksSeedData", {
       onCreate: {
@@ -109,6 +126,8 @@ export class DsAsgn1Stack extends cdk.Stack {
     reviewsTable.grantReadData(getBookByIdFn);
     booksTable.grantReadWriteData(newBookFn);
     reviewsTable.grantReadWriteData(newReviewFn);
+    booksTable.grantReadWriteData(updateReviewFn);
+    reviewsTable.grantReadWriteData(updateReviewFn);
 
     // REST API Gateway Integration
     const api = new apig.RestApi(this, "RestAPI", {
@@ -153,6 +172,13 @@ export class DsAsgn1Stack extends cdk.Stack {
     bookReviewsEndpoint.addMethod(
       "POST",
       new apig.LambdaIntegration(newReviewFn, { proxy: true })
+    );
+
+    // PUT /books/{bookId}/reviews/{reviewerName} - Update a review for a specific book and reviewer
+    const reviewEndpoint = bookReviewsEndpoint.addResource("{reviewerName}");
+    reviewEndpoint.addMethod(
+      "PUT",
+      new apig.LambdaIntegration(updateReviewFn, { proxy: true })
     );
   }
 }
