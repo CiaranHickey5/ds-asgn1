@@ -36,11 +36,12 @@ export class DsAsgn1Stack extends cdk.Stack {
     const getBookByIdFn = new lambdanode.NodejsFunction(this, "GetBookByIdFn", {
       architecture: lambda.Architecture.ARM_64,
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: `${__dirname}/../lambdas/getBookById.ts`, // Make sure the path is correct for the getBookById.ts file
+      entry: `${__dirname}/../lambdas/getBookById.ts`,
       timeout: cdk.Duration.seconds(10),
       memorySize: 128,
       environment: {
-        TABLE_NAME: booksTable.tableName, // Pass the table name as an environment variable
+        TABLE_NAME: booksTable.tableName,
+        REVIEWS_TABLE_NAME: reviewsTable.tableName,
         REGION: "eu-west-1",
       },
     });
@@ -49,7 +50,7 @@ export class DsAsgn1Stack extends cdk.Stack {
     const getAllBooksFn = new lambdanode.NodejsFunction(this, "GetAllBooksFn", {
       architecture: lambda.Architecture.ARM_64,
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: `${__dirname}/../lambdas/getAllBooks.ts`, // Ensure this path is correct for getAllBooks.ts
+      entry: `${__dirname}/../lambdas/getAllBooks.ts`,
       timeout: cdk.Duration.seconds(10),
       memorySize: 128,
       environment: {
@@ -79,6 +80,7 @@ export class DsAsgn1Stack extends cdk.Stack {
     // Permissions
     booksTable.grantReadData(getBookByIdFn);
     booksTable.grantReadData(getAllBooksFn);
+    reviewsTable.grantReadData(getBookByIdFn);
 
     // REST API Gateway Integration
     const api = new apig.RestApi(this, "RestAPI", {
