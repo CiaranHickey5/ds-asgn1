@@ -72,6 +72,19 @@ export class DsAsgn1Stack extends cdk.Stack {
       },
     });
 
+    // Lambda for Add Review
+    const newReviewFn = new lambdanode.NodejsFunction(this, "AddReviewFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      entry: `${__dirname}/../lambdas/addReview.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        REVIEWS_TABLE_NAME: reviewsTable.tableName,
+        REGION: "eu-west-1",
+      },
+    });
+
     // Seed data into the tables using custom resource
     new custom.AwsCustomResource(this, "BooksSeedData", {
       onCreate: {
@@ -95,6 +108,7 @@ export class DsAsgn1Stack extends cdk.Stack {
     booksTable.grantReadData(getAllBooksFn);
     reviewsTable.grantReadData(getBookByIdFn);
     booksTable.grantReadWriteData(newBookFn);
+    reviewsTable.grantReadWriteData(newReviewFn);
 
     // REST API Gateway Integration
     const api = new apig.RestApi(this, "RestAPI", {
@@ -132,6 +146,13 @@ export class DsAsgn1Stack extends cdk.Stack {
     booksEndpoint.addMethod(
       "POST",
       new apig.LambdaIntegration(newBookFn, { proxy: true })
+    );
+
+    // POST /books/{bookId}/reviews - Add a new review for a book
+    const bookReviewsEndpoint = bookEndpoint.addResource("reviews");
+    bookReviewsEndpoint.addMethod(
+      "POST",
+      new apig.LambdaIntegration(newReviewFn, { proxy: true })
     );
   }
 }
