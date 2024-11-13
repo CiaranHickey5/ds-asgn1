@@ -8,36 +8,31 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     console.log("[EVENT]", JSON.stringify(event));
 
-    const parameters = event?.pathParameters;
-    const reviewerName = parameters?.reviewerName; // Use reviewerName to identify the review
+    const { bookId, reviewerName } = event?.pathParameters ?? {};
+
     const body = event.body ? JSON.parse(event.body) : {};
+    const { reviewText } = body;
 
-    const { bookId, reviewText, lastUpdated } = body;
-
-    if (!reviewerName || !bookId || !reviewText || !lastUpdated) {
+    if (!bookId || !reviewerName || !reviewText) {
       return {
         statusCode: 400,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          message:
-            "reviewerName, bookId, reviewText, and lastUpdated are required fields.",
+          message: "bookId, reviewerName, and reviewText are required fields.",
         }),
       };
     }
 
-    // Update the review details only if the lastUpdated attribute matches the provided value
+    // Update the review in DynamoDB
     const updateResponse = await ddbDocClient.send(
       new UpdateCommand({
-        TableName: process.env.TABLE_NAME,
-        Key: { reviewerName, bookId }, // Use reviewerName and bookId as the composite key
+        TableName: process.env.REVIEWS_TABLE_NAME,
+        Key: { bookId: parseInt(bookId), reviewerName }, // Match the partition key and sort key
         UpdateExpression:
-          "SET reviewText = :reviewText, lastUpdated = :newLastUpdated",
-        ConditionExpression:
-          "lastUpdated = :expectedLastUpdated OR attribute_not_exists(lastUpdated)",
+          "SET reviewText = :reviewText, lastUpdated = :lastUpdated", // Update reviewText and lastUpdated
         ExpressionAttributeValues: {
           ":reviewText": reviewText,
-          ":newLastUpdated": new Date().toISOString(),
-          ":expectedLastUpdated": lastUpdated,
+          ":lastUpdated": new Date().toISOString(),
         },
         ReturnValues: "ALL_NEW",
       })
@@ -54,18 +49,6 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   } catch (error: any) {
     console.error("Error updating review:", JSON.stringify(error));
 
-    // Return error message if condition fails
-    if (error.name === "ConditionalCheckFailedException") {
-      return {
-        statusCode: 409,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          message:
-            "Update failed: lastUpdated does not match or review was updated by someone else.",
-        }),
-      };
-    }
-
     return {
       statusCode: 500,
       headers: { "content-type": "application/json" },
@@ -74,6 +57,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 };
 
+// Function to create DynamoDB Document Client
 function createDDbDocClient() {
   const ddbClient = new DynamoDBClient({ region: process.env.REGION });
   const marshallOptions = {

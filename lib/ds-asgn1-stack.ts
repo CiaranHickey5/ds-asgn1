@@ -137,7 +137,7 @@ export class DsAsgn1Stack extends cdk.Stack {
       },
       defaultCorsPreflightOptions: {
         allowHeaders: ["Content-Type", "X-Amz-Date"],
-        allowMethods: ["OPTIONS", "GET"],
+        allowMethods: ["OPTIONS", "GET", "POST", "PUT"],
         allowCredentials: true,
         allowOrigins: ["*"],
       },
