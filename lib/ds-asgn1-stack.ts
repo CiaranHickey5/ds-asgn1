@@ -193,15 +193,11 @@ export class DsAsgn1Stack extends cdk.Stack {
       new apig.LambdaIntegration(getAllBooksFn, { proxy: true })
     );
 
-    // GET /books/{bookId} - Authenticated
+    // GET /books/{bookId} - Public (no authentication)
     const bookEndpoint = booksEndpoint.addResource("{bookId}");
     bookEndpoint.addMethod(
       "GET",
-      new apig.LambdaIntegration(getBookByIdFn, { proxy: true }),
-      {
-        authorizer: cognitoAuthorizer,
-        authorizationType: apig.AuthorizationType.COGNITO,
-      }
+      new apig.LambdaIntegration(getBookByIdFn, { proxy: true })
     );
 
     // POST /books - Authenticated
@@ -238,6 +234,7 @@ export class DsAsgn1Stack extends cdk.Stack {
 
     // Grant permissions to Lambda functions
     booksTable.grantReadData(getBookByIdFn);
+    reviewsTable.grantReadData(getBookByIdFn);
     booksTable.grantReadData(getAllBooksFn);
     booksTable.grantReadWriteData(newBookFn);
     reviewsTable.grantReadWriteData(newReviewFn);
